@@ -33,8 +33,6 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
   const grammar = getElement<HTMLDivElement>("#grammar");
   const input = getElement<HTMLDivElement>("#input");
   const output = getElement<HTMLDivElement>("#output");
-  const showAnonymous = getElement<HTMLInputElement>("#show-anonymous");
-  const showEmpty = getElement<HTMLInputElement>("#show-empty");
   const outputModeRadios = document.querySelectorAll<HTMLInputElement>(
     'input[name="output-mode"]',
   );
@@ -205,6 +203,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
         );
         outputText = traceOutput.text;
         errorHighlights = traceOutput.errors;
+        console.log(errorHighlights);
         spanHighlights = traceOutput.spans;
         captureHighlights = traceOutput.captures;
       } else {
@@ -223,9 +222,9 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
 
     output.textContent = outputText;
     CSS.highlights?.clear();
-    highlight(grammar, grammarHighlights, "highlight-errors");
-    highlight(output, errorHighlights, "highlight-errors");
-    highlight(input, inputHighlights, "highlight-errors");
+    highlight(grammar, grammarHighlights, "highlight-errors-grammar");
+    highlight(output, errorHighlights, "highlight-errors-output");
+    highlight(input, inputHighlights, "highlight-errors-input");
     highlight(output, spanHighlights, "highlight-spans");
     highlight(output, captureHighlights, "highlight-captures");
   };
@@ -265,28 +264,14 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     runWithCaret();
   });
 
-  showAnonymous.addEventListener("change", (e) => {
-    const target = e.target as HTMLInputElement;
-    updateState({
-      options: { ...State.options, showAnonymous: target.checked },
-    });
-    runWithCaret();
-  });
-  showEmpty.addEventListener("change", (e) => {
-    const target = e.target as HTMLInputElement;
-    updateState({ options: { ...State.options, showEmpty: target.checked } });
-    runWithCaret();
-  });
-
-  const defaultSelectedExample = examplesSelect.querySelectorAll("option").values().find((e) => e.dataset["defaultSelected"] === "true")?.value
+  const defaultSelectedExample = examplesSelect
+    .querySelectorAll("option")
+    .values()
+    .find((e) => e.dataset["defaultSelected"] === "true")?.value;
   updateState({
-    options: {
-      showAnonymous: readStorage(STORAGE_KEYS.showAnonymous) === "true",
-      showEmpty: readStorage(STORAGE_KEYS.showEmpty) === "true",
-    },
-    selectedExample: readStorage(STORAGE_KEYS.selectedExample) ?? defaultSelectedExample,
+    selectedExample:
+      readStorage(STORAGE_KEYS.selectedExample) ?? defaultSelectedExample,
   });
-
 
   const workspaceFromStorage = readStorage(STORAGE_KEYS.workspace);
   if (workspaceFromStorage === "scratch") {
@@ -298,12 +283,8 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
   window.addEventListener("beforeunload", () => {
     saveScratch();
     writeStorage(STORAGE_KEYS.workspace, State.workspace);
-    writeStorage(
-      STORAGE_KEYS.showAnonymous,
-      State.options.showAnonymous.toString(),
-    );
     writeStorage(STORAGE_KEYS.showEmpty, State.options.showEmpty.toString());
-    writeStorage(STORAGE_KEYS.selectedExample, State.selectedExample)
+    writeStorage(STORAGE_KEYS.selectedExample, State.selectedExample);
   });
 </script>
 
@@ -422,8 +403,9 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       color: #999;
     }
 
-    ::highlight(highlight-errors) {
-      content: "!";
+    ::highlight(highlight-errors-output),
+    ::highlight(highlight-errors-grammar),
+    ::highlight(highlight-errors-input) {
       text-decoration: red wavy underline;
     }
 
@@ -522,16 +504,6 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
           JSON
         </label>
       </span>
-      <div class="trace-options">
-        <label>
-          <input type="checkbox" id="show-anonymous" />
-          Show Anonymous
-        </label>
-        <label>
-          <input type="checkbox" id="show-empty" />
-          Show Empty
-        </label>
-      </div>
     </div>
     <div class="content-container">
       <div id="output"></div>
