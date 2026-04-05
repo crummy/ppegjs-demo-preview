@@ -124,7 +124,6 @@ export function generateTraceOutput(
   const spans: Range[] = [];
   const captures: Range[] = [];
   let previousEnd = 0;
-  let previousDepth = 0;
   let depth = 0;
 
   const spanWidth = calculateMaxSpanWidth(trace);
@@ -181,6 +180,13 @@ export function generateTraceOutput(
   }
 
   buildOutput(trace)
+
+  if (error?.type === "incomplete_parse") {
+    const remainder = input.slice(previousEnd, input.length)
+    text += " ".repeat(spanWidth) + "..."
+    errors.push({start: text.length, end: text.length + remainder.length})
+    text += remainder
+  }
 
   if (error) {
     text += "\n\n" + printError(error)
