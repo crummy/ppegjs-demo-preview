@@ -1,4 +1,4 @@
-import type { Exp, TraceHistory } from "ppegjs/pPEG.mjs";
+import type { Exp, TraceHistory, TraceElement } from "ppegjs/pPEG.mjs";
 
 type GrammarCompileError = {
   type?: string;
@@ -82,17 +82,9 @@ const SPAN_SEPARATOR = "..";
  * 10..11
  * The UI needs to know the maximum columns for these lines.
  */
-function calculateMaxSpanWidth(trace: TraceHistory) {
-  let maxLength = 0;
-  for (let offset = 0; offset < trace.length; offset += 4) {
-    const start = trace[offset + 2];
-    const end = trace[offset + 3];
-    const spanText = `${start}${SPAN_SEPARATOR}${end}`;
-    if (spanText.length > maxLength) {
-      maxLength = spanText.length;
-    }
-  }
-  return maxLength;
+function calculateMaxSpanWidth({ start, end, children }: TraceElement) {
+  const length = `${start}${SPAN_SEPARATOR}${end}`.length;
+  return Math.max(0, length, ...children.map(calculateMaxSpanWidth))
 }
 
 const formatCentered = (
@@ -124,75 +116,74 @@ const formatCentered = (
  */
 export function generateTraceOutput(
   input: string,
-  rules: string[],
-  trace: TraceHistory,
-  error: Error | null,
-  { showAnonymous, showEmpty }: TraceOptions,
+  trace: TraceElement,
+  error: Error | null
 ): { text: string; spans: Range[]; errors: Range[]; captures: Range[] } {
   let text = "";
   const errors: Range[] = [];
   const spans: Range[] = [];
   const captures: Range[] = [];
-  let previousEnd: number | null = null;
+  let previousEnd = 0;
   let previousDepth = 0;
+  let depth = 0;
 
   const spanWidth = calculateMaxSpanWidth(trace);
 
-  for (let offset = 0; offset < trace.length; offset += 4) {
-    const ruleIdx = trace[offset];
-    const depth = trace[offset + 1];
-    const start = trace[offset + 2];
-    const end = trace[offset + 3];
-    if (start === end && !showEmpty) {
-      continue;
-    }
-    const ruleName = ruleIdx < 0 ? rules[-ruleIdx - 1] : rules[ruleIdx];
-    if (ruleIdx >= 0 && ruleName[0] === '_' && !showAnonymous) {
-      continue;
+  function buildOutput({ rule, success, start, end, children }: TraceElement) {
+    // Skip successful anonymous rules
+    if (success && rule[0] === "_") {
+      return "";
     }
 
-    if (previousEnd !== null && start > previousEnd) {
+    // Output literals
+    if (start > previousEnd) {
+      const literal = input.slice(previousEnd, start);
+      const span = formatCentered(previousEnd, start, spanWidth) + " ";
       spans.push({ start: text.length, end: text.length + spanWidth });
-      text += formatCentered(start, end, spanWidth) + " ";
-
-      const gapPrefix = "│ ".repeat(previousDepth);
-      const gapInput = input.substring(previousEnd, start);
-      text += gapPrefix;
+      const prefix = "│ ".repeat(depth);
+      text += `${span}${prefix}`;
+      const escapedLiteral = escapeTraceInput(literal);
       captures.push({
         start: text.length,
-        end: text.length + gapInput.length,
+        end: text.length + escapedLiteral.length,
       });
-      text += `${gapInput}\n`;
+      text += escapedLiteral + "\n"
     }
+    previousEnd = end;
 
+    // Output '0..10'
     spans.push({ start: text.length, end: text.length + spanWidth });
     text += formatCentered(start, end, spanWidth) + " ";
 
+    // Output leading lines
     const prefix = "│ ".repeat(depth);
     const escapedInput = escapeTraceInput(input.substring(start, end));
-    let line = `${prefix}${ruleName} `;
+    let line = `${prefix}${rule} `;
     captures.push({
       start: text.length + line.length,
       end: text.length + line.length + escapedInput.length,
     });
     line += escapedInput;
-
     const lineStart = text.length;
     text += line;
 
-    if (ruleIdx < 0) {
+    if (!success) {
       const start = lineStart + prefix.length;
-      const end = lineStart + prefix.length + ruleName.length - 1;
+      const end = lineStart + prefix.length + rule.length - 1;
       errors.push({ start, end });
     }
 
     text += "\n";
-    previousEnd = end;
-    previousDepth = depth;
+
+    depth++;
+    children.map(buildOutput);
+    depth--;
   }
 
+  buildOutput(trace)
+
   if (error) {
-    text += "\n\n" + printError(error);
+    text += "\n\n" + printError(error)
   }
 
   return { text, errors, spans, captures };

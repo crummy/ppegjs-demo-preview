@@ -194,10 +194,10 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       if (State.outputMode === "json") {
         outputText = JSON.stringify(parseOutput.ptree, null, 2);
       } else if (State.outputMode === "trace") {
+        const trace = ppeg.show_trace(parseOutput)
         const traceOutput = generateTraceOutput(
           State.inputText,
-          parseOutput.rules,
-          parseOutput.trace_history,
+          trace,
           parseOutput.error,
           State.options,
         );
