@@ -41,16 +41,18 @@ export function generateTreeOutput(
   const prefix = "│ ".repeat(indent);
   const [label, value] = tree;
 
-  // Leaf node
-  if (typeof value === "string") {
-    return `${prefix}${label} "${value}"`;
-  }
-
   // Internal node
   let result = `${prefix}${label}`;
 
-  for (const child of value) {
-    result += "\n" + generateTreeOutput(child, null, indent + 1);
+  // Leaf node
+  if (typeof value === "string") {
+    result += ` "${value}"`;
+  }
+
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      result += "\n" + generateTreeOutput(child, null, indent + 1);
+    }
   }
 
   if (error) {
