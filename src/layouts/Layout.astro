@@ -1,3 +1,7 @@
+---
+import { buildInfo } from "../lib/build-info";
+---
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -9,6 +13,9 @@
   </head>
   <body>
     <slot />
+    <div class="build-badge" aria-label={`Build ${buildInfo.label}`}>
+      {buildInfo.label}
+    </div>
   </body>
 </html>
 
@@ -18,5 +25,34 @@
     margin: 0;
     width: 100%;
     height: 100%;
+  }
+
+  .build-badge {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 0.2rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 82%);
+    color: rgb(0 0 0 / 48%);
+    font-family:
+      "SFMono-Regular", "SF Mono", "Courier New", monospace;
+    font-size: 0.68rem;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    backdrop-filter: blur(2px);
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  @media (max-width: 768px) {
+    .build-badge {
+      right: 0.5rem;
+      bottom: 0.5rem;
+      max-width: calc(100vw - 1rem);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 </style>
