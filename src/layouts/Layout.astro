@@ -13,14 +13,8 @@ import { buildInfo } from "../lib/build-info";
   </head>
   <body>
     <slot />
-    <div class="build-badge">
-      {new Date(buildInfo.timestamp).toLocaleDateString(undefined, {
-                                                                       year: "numeric",
-                                                                       month: "2-digit",
-                                                                       day: "2-digit",
-                                                                       hour: "2-digit",
-                                                                       minute: "2-digit",
-                                                                     })} &#183; {buildInfo.shortSha}
+    <div class="build-badge" aria-label={`Build ${buildInfo.label}`}>
+      {buildInfo.label}
     </div>
   </body>
 </html>
