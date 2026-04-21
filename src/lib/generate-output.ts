@@ -113,7 +113,6 @@ const formatCentered = (
  * @param input - string input to parser
  * @param rules - array of rules, which will be indexed into upon failed rules
  * @param trace - trace history
- * @param { showEmpty, showAnonymous} - limit possibly unwanted output
  * @param error
  */
 export function generateTraceOutput(

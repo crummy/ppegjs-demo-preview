@@ -66,6 +66,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     showAnonymous: "show-anonymous",
     showEmpty: "show-empty",
     selectedExample: "selected-example",
+    outputMode: "output-mode",
   } as const;
 
   const readStorage = (key: string): string | null => {
@@ -249,6 +250,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     radio.addEventListener("change", () => {
       const outputMode = outputModeFromDom();
       updateState({ outputMode });
+      writeStorage(STORAGE_KEYS.outputMode, outputMode);
       runWithCaret();
     });
   }
@@ -268,9 +270,14 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     .querySelectorAll("option")
     .values()
     .find((e) => e.dataset["defaultSelected"] === "true")?.value;
+  const outputModeFromStorage = readStorage(STORAGE_KEYS.outputMode);
   updateState({
     selectedExample:
       readStorage(STORAGE_KEYS.selectedExample) ?? defaultSelectedExample,
+    outputMode:
+      outputModeFromStorage === "trace" || outputModeFromStorage === "json"
+        ? outputModeFromStorage
+        : "tree",
   });
 
   const workspaceFromStorage = readStorage(STORAGE_KEYS.workspace);
@@ -285,6 +292,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     writeStorage(STORAGE_KEYS.workspace, State.workspace);
     writeStorage(STORAGE_KEYS.showEmpty, State.options.showEmpty.toString());
     writeStorage(STORAGE_KEYS.selectedExample, State.selectedExample);
+    writeStorage(STORAGE_KEYS.outputMode, State.outputMode);
   });
 </script>
 
