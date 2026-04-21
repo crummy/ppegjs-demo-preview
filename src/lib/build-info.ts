@@ -7,15 +7,7 @@ type BuildInfo = {
 };
 
 const formatBuildTimestamp = (date: Date): string =>
-  new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-    .format(date)
-    .replace(",", "");
+  date.toISOString().replace(/\.\d{3}Z$/, "Z");
 
 const readShortSha = (): string | null => {
   try {
