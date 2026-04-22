@@ -86,7 +86,7 @@ const SPAN_SEPARATOR = "..";
  */
 function calculateMaxSpanWidth({ start, end, children }: TraceElement) {
   const length = `${start}${SPAN_SEPARATOR}${end}`.length;
-  return Math.max(0, length, ...children.map(calculateMaxSpanWidth))
+  return Math.max(0, length, ...children.map(calculateMaxSpanWidth));
 }
 
 const formatCentered = (
@@ -118,9 +118,10 @@ const formatCentered = (
 export function generateTraceOutput(
   input: string,
   trace: TraceElement,
-  error: Error | null
+  error: Error | null,
 ): { text: string; spans: Range[]; errors: Range[]; captures: Range[] } {
   let text = "";
+  // These ranges store indexes of start..end into the returned text for highlighting
   const errors: Range[] = [];
   const spans: Range[] = [];
   const captures: Range[] = [];
@@ -128,6 +129,43 @@ export function generateTraceOutput(
   let depth = 0;
 
   const spanWidth = calculateMaxSpanWidth(trace);
+
+  function outputLine(
+    start: number,
+    depth: number,
+    spanStart: number,
+    spanEnd: number,
+    literal: string,
+    rule?: string,
+    success: boolean = true,
+  ) {
+    const span = formatCentered(spanStart, spanEnd, spanWidth) + " ";
+    const verticalLines = "│ ".repeat(depth);
+    const escapedLiteral = escapeTraceInput(literal);
+    const ruleSubstitute = rule ? `${rule} ` : ""
+    captures.push({
+      start: start + span.length + verticalLines.length + ruleSubstitute.length,
+      end:
+        start +
+        span.length +
+        verticalLines.length +
+        ruleSubstitute.length +
+        escapedLiteral.length,
+    });
+    spans.push({
+      start,
+      end: start + spanWidth,
+    });
+
+    if (!success && rule) {
+      errors.push({
+        start: start + span.length + verticalLines.length,
+        end: start + span.length + verticalLines.length + rule.length - 1,
+      });
+    }
+
+    return `${span}${verticalLines}${ruleSubstitute}${escapedLiteral}\n`;
+  }
 
   function buildOutput({ rule, success, start, end, children }: TraceElement) {
     // Skip successful anonymous rules
@@ -138,59 +176,39 @@ export function generateTraceOutput(
     // Output literals
     if (start > previousEnd) {
       const literal = input.slice(previousEnd, start);
-      const span = formatCentered(previousEnd, start, spanWidth) + " ";
-      spans.push({ start: text.length, end: text.length + spanWidth });
-      const prefix = "│ ".repeat(depth);
-      text += `${span}${prefix}`;
-      const escapedLiteral = escapeTraceInput(literal);
-      captures.push({
-        start: text.length,
-        end: text.length + escapedLiteral.length,
-      });
-      text += escapedLiteral + "\n"
+      text += outputLine(text.length, depth, previousEnd, start, literal);
     }
-    previousEnd = end;
-
-    // Output '0..10'
-    spans.push({ start: text.length, end: text.length + spanWidth });
-    text += formatCentered(start, end, spanWidth) + " ";
 
     // Output leading lines
-    const prefix = "│ ".repeat(depth);
-    const escapedInput = escapeTraceInput(input.substring(start, end));
-    let line = `${prefix}${rule} `;
-    captures.push({
-      start: text.length + line.length,
-      end: text.length + line.length + escapedInput.length,
-    });
-    line += escapedInput;
-    const lineStart = text.length;
-    text += line;
-
-    if (!success) {
-      const start = lineStart + prefix.length;
-      const end = lineStart + prefix.length + rule.length - 1;
-      errors.push({ start, end });
-    }
-
-    text += "\n";
+    const literal = input.substring(start, end);
+    text += outputLine(text.length, depth, start, end, literal, rule, success);
+    previousEnd = end;
 
     depth++;
     children.map(buildOutput);
     depth--;
   }
 
-  buildOutput(trace)
+  buildOutput(trace);
 
+  // trailing literal
+  if (previousEnd < input.length) {
+    const literal = input.substring(previousEnd);
+    console.log(literal)
+    text += outputLine(text.length, depth + 1, previousEnd, input.length, literal);
+    previousEnd = input.length;
+  }
+
+  // print any extra input we didn't know how to parse
   if (error?.type === "incomplete_parse") {
-    const remainder = input.slice(previousEnd, input.length)
-    text += " ".repeat(spanWidth) + "..."
-    errors.push({start: text.length, end: text.length + remainder.length})
-    text += remainder
+    const remainder = input.slice(previousEnd, input.length);
+    text += " ".repeat(spanWidth) + "...";
+    errors.push({ start: text.length, end: text.length + remainder.length });
+    text += remainder;
   }
 
   if (error) {
-    text += "\n\n" + printError(error)
+    text += "\n\n" + printError(error);
   }
 
   return { text, errors, spans, captures };
