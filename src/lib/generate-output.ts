@@ -125,7 +125,7 @@ export function generateTraceOutput(
   const errors: Range[] = [];
   const spans: Range[] = [];
   const captures: Range[] = [];
-  let previousEnd = 0;
+  let lastLiteralRange: Range | null = null;
   let depth = 0;
 
   const spanWidth = calculateMaxSpanWidth(trace);
@@ -142,8 +142,8 @@ export function generateTraceOutput(
     const span = formatCentered(spanStart, spanEnd, spanWidth) + " ";
     const verticalLines = "│ ".repeat(depth);
     const escapedLiteral = escapeTraceInput(literal);
-    const ruleSubstitute = rule ? `${rule} ` : ""
-    captures.push({
+    const ruleSubstitute = rule ? `${rule} ` : "";
+    const literalRange = {
       start: start + span.length + verticalLines.length + ruleSubstitute.length,
       end:
         start +
@@ -151,7 +151,9 @@ export function generateTraceOutput(
         verticalLines.length +
         ruleSubstitute.length +
         escapedLiteral.length,
-    });
+    };
+    captures.push(literalRange);
+    lastLiteralRange = literalRange;
     spans.push({
       start,
       end: start + spanWidth,
@@ -173,41 +175,74 @@ export function generateTraceOutput(
       return "";
     }
 
-    // Output literals
-    if (start > previousEnd) {
-      const literal = input.slice(previousEnd, start);
-      text += outputLine(text.length, depth, previousEnd, start, literal);
-    }
-
-    // Output leading lines
+    // Output the rule line itself.
     const literal = input.substring(start, end);
     text += outputLine(text.length, depth, start, end, literal, rule, success);
-    previousEnd = end;
 
-    depth++;
-    children.map(buildOutput);
-    depth--;
+    const visibleChildren = children.filter(
+      (child: TraceElement) => !(child.success && child.rule[0] === "_"),
+    );
+
+    if (visibleChildren.length > 0) {
+      let childStart = start;
+      depth++;
+
+      for (const child of visibleChildren) {
+        if (child.start > childStart) {
+          const childGap = input.slice(childStart, child.start);
+          text += outputLine(
+            text.length,
+            depth,
+            childStart,
+            child.start,
+            childGap,
+          );
+        }
+
+        buildOutput(child);
+        childStart = child.end;
+      }
+
+      if (childStart < end) {
+        const trailingChildGap = input.slice(childStart, end);
+        text += outputLine(
+          text.length,
+          depth,
+          childStart,
+          end,
+          trailingChildGap,
+        );
+      }
+
+      depth--;
+    }
+  }
+
+  if (trace.start > 0) {
+    text += outputLine(text.length, depth, 0, trace.start, input.slice(0, trace.start));
   }
 
   buildOutput(trace);
 
   // trailing literal
-  if (previousEnd < input.length) {
-    const literal = input.substring(previousEnd);
-    console.log(literal)
-    text += outputLine(text.length, depth + 1, previousEnd, input.length, literal);
-    previousEnd = input.length;
+  if (trace.end < input.length) {
+    const literal = input.substring(trace.end);
+    text += outputLine(text.length, depth + 1, trace.end, input.length, literal);
   }
 
   // print any extra input we didn't know how to parse
   if (error?.type === "incomplete_parse") {
-    const remainder = input.slice(previousEnd, input.length);
+    const remainder = input.slice(trace.end, input.length);
     text += " ".repeat(spanWidth) + "...";
     errors.push({ start: text.length, end: text.length + remainder.length });
     text += remainder;
   }
 
   if (error) {
+    // if there's an error, highlight the last literal, as though it's not an error node, it's probably relevant
+    if (lastLiteralRange) {
+      errors.push(lastLiteralRange);
+    }
     text += "\n\n" + printError(error);
   }
 
