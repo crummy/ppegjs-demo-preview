@@ -139,6 +139,10 @@ export function generateTraceOutput(
     rule?: string,
     success: boolean = true,
   ) {
+    if (!success && spanStart === spanEnd) {
+      return "";
+    }
+
     const span = formatCentered(spanStart, spanEnd, spanWidth) + " ";
     const verticalLines = "│ ".repeat(depth);
     const escapedLiteral = escapeTraceInput(literal);
