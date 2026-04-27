@@ -234,14 +234,6 @@ export function generateTraceOutput(
     text += outputLine(text.length, depth + 1, trace.end, input.length, literal);
   }
 
-  // print any extra input we didn't know how to parse
-  if (error?.type === "incomplete_parse") {
-    const remainder = input.slice(trace.end, input.length);
-    text += " ".repeat(spanWidth) + "...";
-    errors.push({ start: text.length, end: text.length + remainder.length });
-    text += remainder;
-  }
-
   if (error) {
     // if there's an error, highlight the last literal, as though it's not an error node, it's probably relevant
     if (lastLiteralRange) {
