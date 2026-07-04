@@ -108,7 +108,9 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     if (State.workspace === "example") {
       updateState({
         workspace: "scratch",
-        grammarText: readStorage(STORAGE_KEYS.scratchGrammar) ?? "# Enter your grammar here.\na = 'a'",
+        grammarText:
+          readStorage(STORAGE_KEYS.scratchGrammar) ??
+          "# Enter your grammar here.\na = 'a'",
         inputText: readStorage(STORAGE_KEYS.scratchInput) ?? "a",
       });
       runWithCaret();
@@ -157,10 +159,10 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     }
     scratchButton.innerText =
       State.workspace === "example" ? "Scratch" : "Exit Scratch";
-    if (grammar.textContent !== State.grammarText) {
+    if (editableText(grammar) !== State.grammarText) {
       grammar.textContent = State.grammarText;
     }
-    if (input.textContent !== State.inputText) {
+    if (editableText(input) !== State.inputText) {
       input.textContent = State.inputText;
     }
     State.outputMode === "trace"
@@ -268,6 +270,106 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     runWithCaret();
   };
 
+  const editableText = (editable: HTMLElement) => {
+    return (editable.textContent ?? "").replace(/\r\n?/g, "\n");
+  };
+
+  const setEditableText = (
+    editable: HTMLElement,
+    text: string,
+    selectionOffset: number,
+    keepTrailingCaretLine = false,
+  ) => {
+    editable.textContent = text;
+
+    if (keepTrailingCaretLine && text.endsWith("\n")) {
+      const trailingCaretLine = document.createElement("br");
+      trailingCaretLine.dataset.contenteditableSentinel = "true";
+      editable.appendChild(trailingCaretLine);
+
+      const range = document.createRange();
+      range.setStartAfter(trailingCaretLine);
+      range.setEndAfter(trailingCaretLine);
+
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+
+    restoreSelectionOffsets(
+      editable,
+      Math.min(selectionOffset, text.length),
+      Math.min(selectionOffset, text.length),
+    );
+  };
+
+  const isLineBreakInput = (event: InputEvent) =>
+    event.inputType === "insertParagraph" ||
+    event.inputType === "insertLineBreak" ||
+    event.data === "\n" ||
+    event.data === "\r";
+
+  const replaceRange = (
+    text: string,
+    start: number,
+    end: number,
+    replacement: string,
+  ) => text.slice(0, start) + replacement + text.slice(end);
+
+  const bindEditable = (
+    editable: HTMLElement,
+    readText: () => string,
+    updateText: (text: string) => void,
+  ) => {
+    const commit = (text: string) => {
+      updateText(text);
+      saveScratch();
+      runWithCaret();
+    };
+
+    editable.addEventListener("beforeinput", (event) => {
+      const inputEvent = event as InputEvent;
+      if (!isLineBreakInput(inputEvent)) return;
+
+      const selection = getSelectionOffsets(editable);
+      if (!selection) return;
+
+      // Browsers serialize contenteditable line breaks inconsistently. Update
+      // the plaintext model directly, then add a <br> as the visible caret line.
+      event.preventDefault();
+      const text = replaceRange(
+        readText(),
+        selection.start,
+        selection.end,
+        "\n",
+      );
+      setEditableText(editable, text, selection.start + 1, true);
+      commit(text);
+    });
+
+    editable.addEventListener("input", () => {
+      const selection = getSelectionOffsets(editable);
+      const rawText = editable.textContent ?? "";
+      const text = editableText(editable);
+      const hasStaleCaretLine =
+        editable.lastElementChild instanceof HTMLBRElement &&
+        editable.lastElementChild.dataset.contenteditableSentinel === "true" &&
+        !text.endsWith("\n");
+
+      if (rawText !== text || hasStaleCaretLine) {
+        setEditableText(
+          editable,
+          text,
+          selection?.start ?? text.length,
+          text.endsWith("\n"),
+        );
+      }
+
+      commit(text);
+    });
+  };
+
   examplesSelect.addEventListener("change", () => {
     loadSelectedExample(examplesSelect.value);
   });
@@ -282,16 +384,16 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     });
   }
 
-  input.addEventListener("input", () => {
-    updateState({ inputText: input.textContent ?? "" });
-    saveScratch();
-    runWithCaret();
-  });
-  grammar.addEventListener("input", () => {
-    updateState({ grammarText: grammar.textContent ?? "" });
-    saveScratch();
-    runWithCaret();
-  });
+  bindEditable(
+    input,
+    () => State.inputText,
+    (inputText) => updateState({ inputText }),
+  );
+  bindEditable(
+    grammar,
+    () => State.grammarText,
+    (grammarText) => updateState({ grammarText }),
+  );
 
   const defaultSelectedExample = examplesSelect
     .querySelectorAll("option")
