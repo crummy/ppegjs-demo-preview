@@ -619,9 +619,7 @@ export function highlight(
   ranges: Range[],
   highlightName: string,
 ) {
-  const textNode = element.firstChild;
-  // 3 == TEXT_NODE
-  if (!CSS.highlights || textNode?.nodeType !== 3) {
+  if (!CSS.highlights) {
     return;
   } else if (!element.id) {
     console.warn("No id element on " + element + "; will skip highlighting");
@@ -644,12 +642,43 @@ export function highlight(
     const endExclusive = Math.min(range.end + 1, text.length);
 
     if (start < text.length && endExclusive > start) {
-      const domRange = document.createRange();
-      domRange.setStart(textNode, start);
-      domRange.setEnd(textNode, endExclusive);
-      highlight.add(domRange);
+      const domRange = rangeForTextOffsets(element, start, endExclusive);
+      if (domRange) {
+        highlight.add(domRange);
+      }
     }
   }
 
   CSS.highlights.set(highlightName, highlight);
+}
+
+function rangeForTextOffsets(
+  root: HTMLElement,
+  start: number,
+  endExclusive: number,
+) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let current = 0;
+  let startSet = false;
+  let node: Node | null;
+
+  while ((node = walker.nextNode())) {
+    const textLength = node.textContent?.length ?? 0;
+    const next = current + textLength;
+
+    if (!startSet && start <= next) {
+      range.setStart(node, Math.max(0, start - current));
+      startSet = true;
+    }
+
+    if (startSet && endExclusive <= next) {
+      range.setEnd(node, Math.max(0, endExclusive - current));
+      return range;
+    }
+
+    current = next;
+  }
+
+  return null;
 }
