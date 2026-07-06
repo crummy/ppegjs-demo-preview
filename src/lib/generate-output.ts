@@ -18,49 +18,53 @@ export type TraceOptions = { showAnonymous: boolean; showEmpty: boolean };
 
 export function generateTreeOutput(parse: Parse): {
   text: string;
+  captures: Range[];
   errors: Range[];
 } {
-  return generateTreeNodeOutput(
-    parse.ptree(),
-    parse.ok ? null : formatParseError(parse.errors()),
-  );
-}
-
-function generateTreeNodeOutput(
-  ptree: PtreeNode | [],
-  parseErrorText: string | null = null,
-  indent = 0,
-): { text: string; errors: Range[] } {
+  let text = "";
+  const captures: Range[] = [];
   const errors: Range[] = [];
 
-  if (ptree.length === 0) {
-    return { errors, text: parseErrorText ?? "" };
-  }
+  const ptree = parse.ptree();
 
-  const prefix = "│ ".repeat(indent);
-  const [label, value] = ptree;
+  function appendLine(label: string, value: PtreeNode, indent = 0) {
+    const prefix = "│ ".repeat(indent);
+    // Internal node
+    text += `${prefix}${label}`;
 
-  // Internal node
-  let result = `${prefix}${label}`;
-
-  // Leaf node
-  if (typeof value === "string") {
-    result += ` ${JSON.stringify(value)}`;
-  }
-
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      const recursion = generateTreeNodeOutput(child, null, indent + 1);
-      errors.push(...recursion.errors);
-      result += "\n" + recursion.text;
+    // Leaf node
+    if (typeof value === "string") {
+      const literal = ` ${escapeTraceInput(value)}`;
+      captures.push({
+        start: text.length,
+        end: text.length + literal.length - 1,
+      });
+      text += literal;
+    } else if (Array.isArray(value)) {
+      for (const [l, v] of value) {
+        text += "\n";
+        appendLine(l, v, indent + 1);
+      }
+    } else {
+      console.error("unrecognized value", value);
     }
   }
+  const [label, value] = ptree;
+  appendLine(label, value);
 
-  if (parseErrorText && indent === 0) {
-    result += "\n\n" + parseErrorText;
+  if (!parse.ok) {
+    const { error, highlights } = formatParseError(parse.error());
+    const errorStart = text.length + 2;
+    errors.push(
+      ...highlights.map(({ start, end }) => ({
+        start: errorStart + start,
+        end: errorStart + end,
+      })),
+    );
+    text += "\n\n" + error;
   }
 
-  return { errors, text: result };
+  return { captures, text, errors };
 }
 
 const SPAN_SEPARATOR = "..";
@@ -131,7 +135,7 @@ export function generateTraceOutput(parse: Parse): {
   captures: Range[];
 } {
   const { code, input, trace } = parse;
-  const error = parse.ok ? null : formatParseError(parse.errors());
+  const { error, highlights } = formatParseError(parse.errors());
   let text = "";
   // These ranges store indexes of start..end into the returned text for highlighting
   const errors: Range[] = [];
@@ -168,10 +172,13 @@ export function generateTraceOutput(parse: Parse): {
         span.length +
         verticalLines.length +
         ruleSubstitute.length +
-        escapedLiteral.length,
+        escapedLiteral.length -
+        1,
     };
-    captures.push(literalRange);
-    lastLiteralRange = literalRange;
+    if (escapedLiteral.length > 0) {
+      captures.push(literalRange);
+      lastLiteralRange = literalRange;
+    }
     spans.push({
       start,
       end: start + spanWidth,
@@ -298,6 +305,13 @@ export function generateTraceOutput(parse: Parse): {
     if (lastLiteralRange) {
       errors.push(lastLiteralRange);
     }
+    const errorStart = text.length + 2;
+    errors.push(
+      ...highlights.map(({ start, end }) => ({
+        start: errorStart + start,
+        end: errorStart + end,
+      })),
+    );
     text += "\n\n" + error;
   }
 
@@ -321,25 +335,6 @@ export function generateGrammarCompileErrorOutput(
   if (error?.kind === "parse") {
     highlights.push({ start: error.offset, end: error.offset });
   }
-  //
-  // if (error.fault_rule) lines.push(`Fault rule: ${error.fault_rule}`);
-  // if (typeof error.rule === "string" && error.rule.length > 0) {
-  //   lines.push(`In rule: ${error.rule}`);
-  //   const ruleRange = findRuleDefinitionRange(grammarText, error.rule);
-  //   if (ruleRange) {
-  //     highlights.push(ruleRange);
-  //   }
-  // }
-  //
-  // if (error.column && error.line) {
-  //   lines.push(`Location: Line ${error.line}, col ${error.column}`);
-  //   const offset = extractOffsetFromLineColumn(
-  //     grammarText,
-  //     error.line,
-  //     error.column,
-  //   );
-  //   highlights.push({ start: offset, end: offset });
-  // }
 
   const text = lines.join("\n");
 
@@ -356,7 +351,7 @@ function readGrammarError(errorSource: Code | GrammarError): GrammarError {
 
 export function formatGrammarError(error: GrammarError): string {
   if (error?.kind === "parse") {
-    return ["Grammar compile error", formatParseError(error)].join("\n");
+    return ["Grammar compile error", formatParseError(error).error].join("\n");
   }
   return formatCodeError(error);
 }
@@ -371,15 +366,28 @@ export function formatCodeError(error: CodeError | null): string {
   return lines.join("\n");
 }
 
-export function formatParseError(error: ParseError | null): string {
-  if (!error) return "";
+export function formatParseError(error: ParseError | null): {
+  error: string;
+  highlights: Range[];
+} {
+  if (!error) return { error: "", highlights: [] };
 
   const atPos = `at: ${error.offset} of: ${error.end}`;
   const title = `*** parse failed ${atPos}${formatEmptyAlternative(error)}`;
-  return `${title}\n${formatLocation(error)}`;
+  const { location, highlights } = formatLocation(error);
+  return {
+    error: `${title}\n${location}`,
+    highlights: highlights.map(({ end, start }) => ({
+      start: start + title.length + 1,
+      end: end + title.length + 1,
+    })),
+  };
 }
 
-function formatLocation(error: ParseError): string {
+function formatLocation(error: ParseError): {
+  location: string;
+  highlights: Range[];
+} {
   const lines: string[] = [];
   const { location } = error;
   if (location.previousLineText !== undefined && location.previousLine) {
@@ -394,12 +402,25 @@ function formatLocation(error: ParseError): string {
   const afterCaret =
     error.offset === error.end
       ? ""
-      : location.lineText.slice(error.offset - location.lineStart);
+      : location.lineText.slice(
+          error.offset - location.lineStart,
+          error.end - location.lineStart,
+        );
   const left = `line ${location.line} | ${beforeCaret}`;
   const note = formatParseNote(error);
+  const previousLines = lines.join("\n");
+  const lineStart = previousLines.length > 0 ? previousLines.length + 1 : 0;
+  const highlightStart = lineStart + left.length;
+  const highlightLength = Math.max(1, afterCaret.length);
+  const highlights = [
+    {
+      start: highlightStart,
+      end: highlightStart + highlightLength - 1,
+    },
+  ];
   lines.push(`${left}${afterCaret}`);
   lines.push(`${" ".repeat(left.length)}^ ${note}`);
-  return lines.join("\n");
+  return { location: lines.join("\n"), highlights };
 }
 
 function formatParseNote(error: ParseError): string {

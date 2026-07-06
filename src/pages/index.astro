@@ -208,6 +208,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       } else {
         const treeOutput = generateTreeOutput(parseOutput);
         outputText = treeOutput.text;
+        captureHighlights = treeOutput.captures;
         errorHighlights = treeOutput.errors;
         grammarHighlights = failedRuleHighlights(State.grammarText, {
           fault_rule: failedRuleName(parseOutput),

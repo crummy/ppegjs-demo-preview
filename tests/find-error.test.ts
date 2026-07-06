@@ -119,6 +119,29 @@ day =: [0-9]*2
     generateTreeOutput(parsed).text,
     /\*\*\* parse failed at: 9 of: 10\nline 1 \| 2021-02-0d\n                  \^ failed/,
   );
+  const output = generateTreeOutput(parsed);
+  assert.deepEqual(
+    output.errors.map((range) => output.text.slice(range.start, range.end + 1)),
+    ["d"],
+  );
+});
+
+test("generateTraceOutput highlights appended parse errors at the shifted output position", () => {
+  const parser = compile(`
+date = year '-' month '-' day
+year =: [0-9]*4
+month =: [0-9]*2
+day =: [0-9]*2
+`);
+  const parsed = parser.parse("2021-02-0d");
+
+  assert.equal(parsed.ok, false);
+  const output = generateTraceOutput(parsed);
+  assert.equal(output.text.includes("*** parse failed at: 9 of: 10"), true);
+  assert.deepEqual(
+    output.errors.map((range) => output.text.slice(range.start, range.end + 1)),
+    ["date", "day", "d", "d"],
+  );
 });
 
 test("generateGrammarCompileErrorOutput formats thrown compile errors", () => {
