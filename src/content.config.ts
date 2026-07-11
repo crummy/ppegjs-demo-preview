@@ -31,24 +31,41 @@ _ln     = ~[\\n\\r]* _
 _       = [ \\t\\n\\r]*
 `;
 
-type Field = ["field", ["key", string], ["value", string]];
+const exampleDataSchema = z
+  .object({
+    title: z.string(),
+    grammar: z.string(),
+    input: z.string(),
+  })
+  .catchall(z.string());
 
-type PTree = [
-  "File",
-  [["Fields", Field[]], ["grammar", string], ["input", string]],
-];
+type Pair = [string, string];
+type FieldValue = { key: string; value: string };
 
-type ParseTree = [string, string | ParseTree[]];
+const transforms = {
+  // A parsed field starts as just two pairs: ["key", fieldname], ["value", capture]
+  // Parse these arrays into { key: fieldname, value: capture }
+  field: (value: [Pair, Pair]): FieldValue => {
+    const [[, key], [, fieldValue]] = value;
+    return { key, value: fieldValue };
+  },
+  // Then, turn [{key: 'a', value: 'b'}, { key: 'c', value: 'd' }] into:
+  // { a: 'b', c: 'd' }
+  Fields: (value: FieldValue[]): Record<string, string> =>
+    Object.fromEntries(
+      value.filter(({ key }) => key).map(({ key, value }) => [key, value]),
+    ),
+  // Finally, after parsing the grammar and input as well, return:
+  // { a: 'b', c: 'd', grammar: grammar, input: input }
+  File: (
+    value: [Record<string, string>, Pair, Pair],
+  ): z.infer<typeof exampleDataSchema> => {
+    const [{ title, ...fields }, [, grammar], [, input]] = value;
+    return { ...fields, title, grammar, input };
+  },
+};
 
-type TranslatedValue = string | TranslatedNode[] | Record<string, unknown>;
-
-type TranslatedNode = [string, TranslatedValue];
-
-type TransformFn = (tree: ParseTree, transform: TransformMap) => TranslatedNode;
-
-type TransformMap = Record<string, TransformFn>;
-
-const parser = ppeg.compile(grammar);
+const parser = ppeg.compile(grammar, transforms);
 
 export const examples = defineCollection({
   loader: async () => {
@@ -60,13 +77,9 @@ export const examples = defineCollection({
     const examples = Object.values(files).map((contents) => {
       const parsed = parser.parse(contents);
       if (!parsed.ok) throw new Error(formatParseError(parsed.errors()).error);
-      const ptree = parsed.ptree() as PTree;
-      const transform = {
-        File: obj,
-        Fields: obj,
-      };
-      // @ts-ignore
-      const { grammar, input, Fields } = translate(ptree, transform)[1];
+      const [ok, value] = parsed.transform();
+      if (!ok) throw new Error(formatParseError(parsed.errors()).error);
+      const { grammar, input, ...Fields } = exampleDataSchema.parse(value);
       return {
         grammar,
         input,
@@ -76,6 +89,13 @@ export const examples = defineCollection({
       };
     });
     console.log(`Parsing ${examples.length} examples`);
+    const highlightedExamples = examples.filter((e) => e.highlighted).length;
+    if (highlightedExamples !== 1) {
+      console.error(
+        "Expected exactly one highlighted example but found " +
+          highlightedExamples,
+      );
+    }
     return examples;
   },
   // This schema ensures that the data read in the collection above is valid, by parsing it with Zod
@@ -86,38 +106,5 @@ export const examples = defineCollection({
     highlighted: z.boolean().optional(),
   }),
 });
-
-function translate(tree: ParseTree, transform: TransformMap): TranslatedNode {
-  const [id, val] = tree;
-  const fn = transform[id];
-  if (fn) return fn(tree, transform);
-  if (typeof val === "string") return tree;
-  const result: TranslatedNode[] = [];
-  for (let i = 0; i < val.length; i += 1) {
-    result.push(translate(val[i], transform));
-  }
-  return [id, result];
-}
-
-function obj(tree: ParseTree, transform: TransformMap): TranslatedNode {
-  // expect child arr
-  const [id, val] = tree;
-  if (typeof val === "string") return [id, { id: val }];
-  if (!Array.isArray(val)) throw new Error(`Expected array, got ${tree}`);
-  const result: Record<string, TranslatedValue> = {};
-  for (let i = 0; i < val.length; i += 1) {
-    const [k, w] = translate(val[i], transform);
-    if (typeof w === "string") {
-      result[k] = w;
-    } else if (Array.isArray(w) && w.length === 2) {
-      const [[_key, key], [_val, val]] = w;
-      result[key] = val;
-    } else {
-      // err
-      result[k] = w;
-    }
-  }
-  return [id, result];
-}
 
 export const collections = { examples };
