@@ -15,7 +15,7 @@
     "@astrojs/check": "^0.9.9",
     "astro": "^7.0.7",
     "ppegjs": "git://github.com/crummy/pPEGjs.git#ca72b6e7ad4281401c2d0bb7eab5558f7962fb5d",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
