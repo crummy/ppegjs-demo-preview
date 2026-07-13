@@ -31,41 +31,29 @@ _ln     = ~[\\n\\r]* _
 _       = [ \\t\\n\\r]*
 `;
 
-const exampleDataSchema = z
-  .object({
-    title: z.string(),
-    grammar: z.string(),
-    input: z.string(),
-  })
-  .catchall(z.string());
-
-type Pair = [string, string];
-type FieldValue = { key: string; value: string };
-
-const transforms = {
-  // A parsed field starts as just two pairs: ["key", fieldname], ["value", capture]
-  // Parse these arrays into { key: fieldname, value: capture }
-  field: (value: [Pair, Pair]): FieldValue => {
-    const [[, key], [, fieldValue]] = value;
-    return { key, value: fieldValue };
-  },
-  // Then, turn [{key: 'a', value: 'b'}, { key: 'c', value: 'd' }] into:
-  // { a: 'b', c: 'd' }
-  Fields: (value: FieldValue[]): Record<string, string> =>
-    Object.fromEntries(
-      value.filter(({ key }) => key).map(({ key, value }) => [key, value]),
-    ),
-  // Finally, after parsing the grammar and input as well, return:
-  // { a: 'b', c: 'd', grammar: grammar, input: input }
-  File: (
-    value: [Record<string, string>, Pair, Pair],
-  ): z.infer<typeof exampleDataSchema> => {
-    const [{ title, ...fields }, [, grammar], [, input]] = value;
-    return { ...fields, title, grammar, input };
-  },
+type Schema = {
+  Fields: {
+    [key: string]: string | undefined;
+    title: string;
+    highlighted?: "true" | "false";
+  };
+  grammar: string;
+  input: string;
 };
 
-const parser = ppeg.compile(grammar, transforms);
+const object: (value: unknown) => unknown = (value) =>
+  Object.fromEntries(value as Iterable<readonly [PropertyKey, unknown]>);
+const identity = <T>(value: T) => value;
+
+const parser = ppeg.compile(grammar, {
+  File: object,
+  "Fields:": object,
+  field: identity,
+  key: String,
+  value: String,
+  "grammar:": String,
+  "input:": String,
+});
 
 export const examples = defineCollection({
   loader: async () => {
@@ -79,7 +67,7 @@ export const examples = defineCollection({
       if (!parsed.ok) throw new Error(formatParseError(parsed.errors()).error);
       const [ok, value] = parsed.transform();
       if (!ok) throw new Error(formatParseError(parsed.errors()).error);
-      const { grammar, input, ...Fields } = exampleDataSchema.parse(value);
+      const { Fields, grammar, input } = value as Schema;
       return {
         grammar,
         input,
