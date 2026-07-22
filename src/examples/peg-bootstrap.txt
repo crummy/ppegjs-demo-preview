@@ -1,7 +1,5 @@
 title: PEG bootstrap
 ---
-# Bootstrap minimal PEG that can parse itself...
-
 peg   = rule+
 rule  = id _ '=' _ alt
 
@@ -37,3 +35,6 @@ id    = [a-z_]+
 str   = ['] ~[']* [']
 chars = '[' ~']'* ']'
 _     = ('#' ~[\n\r]* / [ \t\n\r]+)*
+--- notes
+Bootstrap minimal PEG that can parse itself - note that the grammar and input
+are identical.

@@ -1,7 +1,5 @@
 title: URL
 ---
-# Equivalent to the regular expression for
-# well-formed URI's in RFC 3986.
 URI     = (scheme ':')? ('//' auth)?
           path ('?' query)? ('#' frag)?
 scheme  = ~[:/?#]+
@@ -11,3 +9,6 @@ query   = ~'#'*
 frag    = ~[ \t\n\r]*
 ---
 http://www.ics.uci.edu/pub/ietf/uri/#Related
+---
+Equivalent to the regular expression for
+well-formed URI's in RFC 3986.

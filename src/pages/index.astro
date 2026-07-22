@@ -3,7 +3,10 @@ import Layout from "../layouts/Layout.astro";
 import { getCollection } from "astro:content";
 
 const collection = await getCollection("examples");
-const examples = collection.map((c) => ({...c.data, titleEscaped: c.data.title.replace(/\W+/g, "-").toLowerCase()}));
+const examples = collection.map((c) => ({
+  ...c.data,
+  titleEscaped: c.data.title.replace(/\W+/g, "-").toLowerCase(),
+}));
 const initialExample = examples.find((e) => e.highlighted)?.title;
 ---
 
@@ -34,6 +37,9 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
   const grammar = getElement<HTMLDivElement>("#grammar");
   const input = getElement<HTMLDivElement>("#input");
   const output = getElement<HTMLDivElement>("#output");
+  const outputContent = getElement<HTMLDivElement>("#output-content");
+  const notes = getElement<HTMLDivElement>("#notes");
+  const notesToggle = getElement<HTMLButtonElement>("#notes-toggle");
   const outputModeRadios = document.querySelectorAll<HTMLInputElement>(
     'input[name="output-mode"]',
   );
@@ -53,6 +59,8 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     workspace: "example" | "scratch";
     grammarText: string;
     inputText: string;
+    notesText: string;
+    showNotes: boolean;
     outputMode: OutputMode;
     error: boolean;
     options: TraceOptions;
@@ -89,6 +97,8 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     workspace: "example",
     grammarText: "",
     inputText: "",
+    notesText: "",
+    showNotes: true,
     outputMode: outputModeFromDom(),
     error: false,
     options: { showAnonymous: false, showEmpty: false },
@@ -112,6 +122,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
           readStorage(STORAGE_KEYS.scratchGrammar) ??
           "# Enter your grammar here.\na = 'a'",
         inputText: readStorage(STORAGE_KEYS.scratchInput) ?? "a",
+        notesText: "",
       });
       runWithCaret();
     } else {
@@ -168,6 +179,13 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     State.outputMode === "trace"
       ? document.querySelector(".trace-options")?.classList.remove("hidden")
       : document.querySelector(".trace-options")?.classList.add("hidden");
+
+    const hasNotes = State.workspace === "example" && State.notesText.length > 0;
+    notes.textContent = State.notesText;
+    notesToggle.classList.toggle("hidden", !hasNotes);
+    notesToggle.innerText = State.showNotes ? "Hide notes" : "Show notes";
+    outputContent.classList.toggle("has-notes", hasNotes && State.showNotes);
+    notes.classList.toggle("hidden", !hasNotes || !State.showNotes);
 
     document
       .querySelectorAll(".error-alert")
@@ -267,6 +285,8 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       workspace: "example",
       grammarText: option.dataset.grammar ?? "",
       inputText: option.dataset.input ?? "",
+      notesText: option.dataset.notes ?? "",
+      showNotes: true,
     });
     runWithCaret();
   };
@@ -375,6 +395,10 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     loadSelectedExample(examplesSelect.value);
   });
   scratchButton.addEventListener("click", toggleScratch);
+  notesToggle.addEventListener("click", () => {
+    updateState({ showNotes: !State.showNotes });
+    runWithCaret();
+  });
 
   for (const radio of outputModeRadios) {
     radio.addEventListener("change", () => {
@@ -444,6 +468,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
 
     #input,
     #grammar,
+    #notes,
     #output {
       margin: 2px;
       padding: 5px;
@@ -455,6 +480,10 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
 
     #output {
       white-space: pre;
+    }
+
+    #notes {
+      border-bottom: thin solid gray;
     }
 
     .content-container {
@@ -504,6 +533,27 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       flex-grow: 1;
     }
 
+    .output-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    .output-notes-control {
+      display: flex;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .output-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+    }
+
     .output-mode {
       display: flex;
       align-items: center;
@@ -527,6 +577,23 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       border: thin solid gray;
       background: white;
       cursor: pointer;
+    }
+
+    #notes-toggle {
+      padding: 0.1rem 0.5rem;
+      border: thin solid gray;
+      background: white;
+      cursor: pointer;
+    }
+
+    .output-content {
+      display: grid;
+      grid-template-rows: 1fr;
+      min-height: 0;
+    }
+
+    .output-content.has-notes {
+      grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
     }
 
     #scratch.active {
@@ -573,6 +640,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       /**inputs should no longer be scrollable**/
       #grammar,
       #input,
+      #notes,
       #output {
         overflow-y: visible;
       }
@@ -593,12 +661,13 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
         <label for="examples">Examples: </label>
         <select name="examples" id="examples">
           {
-            examples.map(({ title, titleEscaped, grammar, input }) => (
+            examples.map(({ title, titleEscaped, grammar, input, notes }) => (
               <option
                 id={`option-${titleEscaped}`}
                 value={titleEscaped}
                 data-grammar={grammar}
                 data-input={input}
+                data-notes={notes}
                 data-default-selected={title == initialExample}
               >
                 {title}
@@ -631,27 +700,37 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
   </div>
   <div class="output">
     <div class="header">
-      Parse Tree
-      <span class="error-alert" title="An error occurred during processing"
-        >⚠️</span
-      >
-      <span class="output-mode">
-        <label class="output-mode-option">
-          <input type="radio" name="output-mode" value="tree" checked />
-          Tree
-        </label>
-        <label class="output-mode-option">
-          <input type="radio" name="output-mode" value="trace" />
-          Trace
-        </label>
-        <label class="output-mode-option">
-          <input type="radio" name="output-mode" value="json" />
-          JSON
-        </label>
+      <span class="output-title">
+        Output
+        <span class="error-alert" title="An error occurred during processing"
+          >⚠️</span
+        >
       </span>
+      <span class="output-notes-control">
+        <button id="notes-toggle" type="button" class="hidden">Hide notes</button>
+      </span>
+      <div class="output-controls">
+        <span class="output-mode">
+          <label class="output-mode-option">
+            <input type="radio" name="output-mode" value="tree" checked />
+            Tree
+          </label>
+          <label class="output-mode-option">
+            <input type="radio" name="output-mode" value="trace" />
+            Trace
+          </label>
+          <label class="output-mode-option">
+            <input type="radio" name="output-mode" value="json" />
+            JSON
+          </label>
+        </span>
+      </div>
     </div>
-    <div class="content-container">
-      <div id="output"></div>
+    <div class="output-content" id="output-content">
+      <div class="content-container hidden" id="notes"></div>
+      <div class="content-container">
+        <div id="output"></div>
+      </div>
     </div>
   </div>
 </Layout>

@@ -9,6 +9,8 @@
  * (grammar)
  * ---
  * (input)
+ * ---
+ * (optional notes)
  */
 
 import { defineCollection } from "astro:content";
@@ -17,9 +19,10 @@ import { ppeg } from "ppegjs";
 import { formatParseError } from "./lib/generate-output";
 
 const grammar = `
-File    = Fields _sep grammar _sep input
+File    = Fields _sep grammar _sep input (_sep notes)?
 grammar = _line*
-input   = _ln*
+input   = _line*
+notes   = _ln*
 Fields  = (field / comment)*
 comment = '#' _ln
 field   = key ':' _ value _
@@ -39,6 +42,7 @@ type Schema = {
   };
   grammar: string;
   input: string;
+  notes?: string;
 };
 
 const object: (value: unknown) => unknown = (value) =>
@@ -53,6 +57,7 @@ const parser = ppeg.compile(grammar, {
   value: String,
   "grammar:": String,
   "input:": String,
+  "notes:": String,
 });
 
 export const examples = defineCollection({
@@ -67,10 +72,14 @@ export const examples = defineCollection({
       if (!parsed.ok) throw new Error(formatParseError(parsed.errors()).error);
       const [ok, value] = parsed.transform();
       if (!ok) throw new Error(formatParseError(parsed.errors()).error);
-      const { Fields, grammar, input } = value as Schema;
+      const { Fields, grammar, input, notes } = value as Schema;
+      // When notes are present, input has a trailing newline, which is often unexpected.
+      const inputWithoutNotesSeparatorNewline =
+        notes === undefined ? input : input.replace(/\r?\n$/, "");
       return {
         grammar,
-        input,
+        input: inputWithoutNotesSeparatorNewline,
+        notes,
         ...Fields,
         id: Fields.title,
         highlighted: Fields.highlighted === "true",
@@ -91,6 +100,7 @@ export const examples = defineCollection({
     title: z.string(),
     grammar: z.string(),
     input: z.string(),
+    notes: z.string().optional(),
     highlighted: z.boolean().optional(),
   }),
 });
