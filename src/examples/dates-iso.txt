@@ -1,0 +1,12 @@
+title: Dates (ISO)
+---
+
+# YMD -- ISO 8601
+
+Date  = year '-' month '-' day
+year  = [0-9]*4
+month = [0-9]*2
+day   = [0-9]*2
+
+---
+2026-03-04

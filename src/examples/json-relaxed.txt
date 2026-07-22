@@ -1,0 +1,24 @@
+title: JSON relaxed
+---
+# A very relaxed JSON RFC8259
+# optional: commas, quotes
+# and comments
+
+json  = _ value _
+value = Obj / Arr / atom
+Obj   = '{' (memb / _)* '}'
+memb  = atom _ ':' json
+Arr   = '[' json* ']'
+
+atom  = str / num / id
+str   = '"' ('\"' / ~'"')* '"'
+num   = [0-9] [.0-9eE+-]*
+id    = [a-zA-Z0-9_]+
+
+_     : ('#' ~[\n\r]* / [, \t\n\r]+)*
+
+---
+{
+    one: [123.4 foo {bar: "baz blat"}]
+    two: true # for example..
+}

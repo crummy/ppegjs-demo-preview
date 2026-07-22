@@ -1,0 +1,15 @@
+title: Dates
+highlighted: true
+---
+
+DMY   = day '/' month '/' year
+day   = d d?
+month = d d?
+year  = d d (d d)?
+d     : [0-9]
+
+# semantic labels, USA ambiguous syntax:
+MDY   = month '/' day '/' year
+
+---
+2/3/2026

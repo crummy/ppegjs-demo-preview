@@ -1,0 +1,39 @@
+title: PEG bootstrap
+---
+# Bootstrap minimal PEG that can parse itself...
+
+peg   = rule+
+rule  = id _ '=' _ alt
+
+alt   = seq _ ('/' _ seq)*
+seq   = elem (' '* elem)* _
+elem  = pfx? term sfx?
+pfx   = [!&~]
+sfx   = [*+?]
+
+term  = id / str / chars / exp
+exp   = '(' _ alt ')'
+
+id    = [a-z_]+
+str   = ['] ~[']* [']
+chars = '[' ~']'* ']'
+_     = ('#' ~[\n\r]* / [ \t\n\r]+)*
+
+--- example
+
+peg   = rule+
+rule  = id _ '=' _ alt
+
+alt   = seq _ ('/' _ seq)*
+seq   = elem (' '* elem)* _
+elem  = pfx? term sfx?
+pfx   = [!&~]
+sfx   = [*+?]
+
+term  = id / str / chars / exp
+exp   = '(' _ alt ')'
+
+id    = [a-z_]+
+str   = ['] ~[']* [']
+chars = '[' ~']'* ']'
+_     = ('#' ~[\n\r]* / [ \t\n\r]+)*

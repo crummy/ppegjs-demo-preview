@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { getCollection } from "astro:content";
 
 const collection = await getCollection("examples");
-const examples = collection.map((c) => c.data);
+const examples = collection.map((c) => ({...c.data, titleEscaped: c.data.title.replace(/\W+/g, "-").toLowerCase()}));
 const initialExample = examples.find((e) => e.highlighted)?.title;
 ---
 
@@ -593,10 +593,10 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
         <label for="examples">Examples: </label>
         <select name="examples" id="examples">
           {
-            examples.map(({ title, grammar, input }) => (
+            examples.map(({ title, titleEscaped, grammar, input }) => (
               <option
-                id={`option-${title}`}
-                value={title}
+                id={`option-${titleEscaped}`}
+                value={titleEscaped}
                 data-grammar={grammar}
                 data-input={input}
                 data-default-selected={title == initialExample}

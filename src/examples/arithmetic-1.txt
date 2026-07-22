@@ -1,0 +1,11 @@
+title: Arithmetic (2)
+---
+expr = mul (add mul)*
+mul  = val (mop val)*
+val  = var / num
+var  = [a-z]+
+num  = [0-9]+
+add  = '+' / '-'
+mop  = '*' / '/'
+---
+x+y*z-1

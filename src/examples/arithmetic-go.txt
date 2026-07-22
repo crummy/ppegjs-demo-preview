@@ -1,0 +1,20 @@
+title: Arithmetic (Go)
+---
+# GO-lang expressions  precedence  operators
+expr = and (op1 and)*     #  1     ||
+and  = cmp (op2 cmp)*     #  2     &&
+cmp  = sum (op3 sum)*     #  3     == != < <= > >=
+sum  = mul (op4 mul)*     #  4     +  -  | ^
+mul  = val (op5 val)*     #  5     * / % << >> &  &^
+val  = _ (grp / var / num) _
+grp  = '(' expr ')'
+var  = [a-zA-Z_] [a-zA-Z0-9_]*
+num  = [0-9]+ ('.' [0-9]+)? ([eE] [+-]? [0-9]+)?
+op1  = '||'
+op2  = '&&'
+op3  = '==' / '!=' /'<=' / '<' !'<' / '>=' / '>' !'>'
+op4  = '+' / '-' / '|' !'|' / '^'
+op5  = '*' / '/' / '%' / '<<' / '>>' / '&^' / '&' !'&'
+_    = [ \t\n\r]*
+---
+x == y+1 && p+x*y > 42 || 0

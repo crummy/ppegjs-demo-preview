@@ -1,14 +1,16 @@
-title: CSV
+title: CSV format
 ---
-CSV     = Hdr Row+
-Hdr     = Row
-Row     = field (',' field)* '\r'? '\n'
-field   = _string / _text / ''
+# Comma Separated Variables, a simplified RFC4180
 
-_text   = ~[,\n\r]+
-_string = '"' (~["] / '""')* '"'
+CSV   = Row+
+Row   = field (',' field)* nl
+field = string / text
+
+text   : ~[,\n\r]+
+string : '"' ('""'/ ~'"')* '"'
+nl     : '\n' / '\r' '\n'? / !.
+
 ---
 A,B,C
 a1,b1,c1
 a2,"b,2",c2
-a3,b3,c3
