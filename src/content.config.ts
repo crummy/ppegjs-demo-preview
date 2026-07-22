@@ -43,6 +43,7 @@ type Schema = {
   grammar: string;
   input: string;
   notes?: string;
+  notesHtml?: string;
 };
 
 const object: (value: unknown) => unknown = (value) =>
@@ -61,39 +62,56 @@ const parser = ppeg.compile(grammar, {
 });
 
 export const examples = defineCollection({
-  loader: async () => {
-    const files = import.meta.glob<string>("./examples/*.txt", {
-      query: "?raw",
-      import: "default",
-      eager: true,
-    });
-    const examples = Object.values(files).map((contents) => {
-      const parsed = parser.parse(contents);
-      if (!parsed.ok) throw new Error(formatParseError(parsed.errors()).error);
-      const [ok, value] = parsed.transform();
-      if (!ok) throw new Error(formatParseError(parsed.errors()).error);
-      const { Fields, grammar, input, notes } = value as Schema;
-      // When notes are present, input has a trailing newline, which is often unexpected.
-      const inputWithoutNotesSeparatorNewline =
-        notes === undefined ? input : input.replace(/\r?\n$/, "");
-      return {
-        grammar,
-        input: inputWithoutNotesSeparatorNewline,
-        notes,
-        ...Fields,
-        id: Fields.title,
-        highlighted: Fields.highlighted === "true",
-      };
-    });
-    console.log(`Parsing ${examples.length} examples`);
-    const highlightedExamples = examples.filter((e) => e.highlighted).length;
-    if (highlightedExamples !== 1) {
-      console.error(
-        "Expected exactly one highlighted example but found " +
-          highlightedExamples,
+  loader: {
+    name: "examples",
+    load: async ({ parseData, renderMarkdown, store }) => {
+      const files = import.meta.glob<string>("./examples/*.txt", {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      });
+      const examples = await Promise.all(
+        Object.values(files).map(async (contents) => {
+          const parsed = parser.parse(contents);
+          if (!parsed.ok)
+            throw new Error(formatParseError(parsed.errors()).error);
+          const [ok, value] = parsed.transform();
+          if (!ok) throw new Error(formatParseError(parsed.errors()).error);
+          const { Fields, grammar, input, notes } = value as Schema;
+          // When notes are present, input has a trailing newline, which is often unexpected.
+          const inputWithoutNotesSeparatorNewline =
+            notes === undefined ? input : input.replace(/\r?\n$/, "");
+          const notesHtml =
+            notes === undefined
+              ? undefined
+              : (await renderMarkdown(notes)).html;
+          return {
+            grammar,
+            input: inputWithoutNotesSeparatorNewline,
+            notes,
+            notesHtml,
+            ...Fields,
+            id: Fields.title,
+            highlighted: Fields.highlighted === "true",
+          };
+        }),
       );
-    }
-    return examples;
+      console.log(`Parsing ${examples.length} examples`);
+      const highlightedExamples = examples.filter((e) => e.highlighted).length;
+      if (highlightedExamples !== 1) {
+        console.error(
+          "Expected exactly one highlighted example but found " +
+            highlightedExamples,
+        );
+      }
+      store.clear();
+      for (const example of examples) {
+        store.set({
+          id: example.id,
+          data: await parseData({ id: example.id, data: example }),
+        });
+      }
+    },
   },
   // This schema ensures that the data read in the collection above is valid, by parsing it with Zod
   schema: z.object({
@@ -101,6 +119,7 @@ export const examples = defineCollection({
     grammar: z.string(),
     input: z.string(),
     notes: z.string().optional(),
+    notesHtml: z.string().optional(),
     highlighted: z.boolean().optional(),
   }),
 });

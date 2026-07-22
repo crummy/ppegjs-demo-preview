@@ -6,6 +6,9 @@ const collection = await getCollection("examples");
 const examples = collection.map((c) => ({
   ...c.data,
   titleEscaped: c.data.title.replace(/\W+/g, "-").toLowerCase(),
+  notesTemplateId: c.data.notesHtml
+    ? `notes-template-${c.data.title.replace(/\W+/g, "-").toLowerCase()}`
+    : undefined,
 }));
 const initialExample = examples.find((e) => e.highlighted)?.title;
 ---
@@ -59,7 +62,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     workspace: "example" | "scratch";
     grammarText: string;
     inputText: string;
-    notesText: string;
+    notesTemplateId: string;
     showNotes: boolean;
     outputMode: OutputMode;
     error: boolean;
@@ -97,7 +100,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     workspace: "example",
     grammarText: "",
     inputText: "",
-    notesText: "",
+    notesTemplateId: "",
     showNotes: true,
     outputMode: outputModeFromDom(),
     error: false,
@@ -122,7 +125,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
           readStorage(STORAGE_KEYS.scratchGrammar) ??
           "# Enter your grammar here.\na = 'a'",
         inputText: readStorage(STORAGE_KEYS.scratchInput) ?? "a",
-        notesText: "",
+        notesTemplateId: "",
       });
       runWithCaret();
     } else {
@@ -180,8 +183,15 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       ? document.querySelector(".trace-options")?.classList.remove("hidden")
       : document.querySelector(".trace-options")?.classList.add("hidden");
 
-    const hasNotes = State.workspace === "example" && State.notesText.length > 0;
-    notes.textContent = State.notesText;
+    const hasNotes =
+      State.workspace === "example" && State.notesTemplateId.length > 0;
+    notes.replaceChildren();
+    if (hasNotes) {
+      const template = getElement<HTMLTemplateElement>(
+        `#${State.notesTemplateId}`,
+      );
+      notes.append(template.content.cloneNode(true));
+    }
     notesToggle.classList.toggle("hidden", !hasNotes);
     notesToggle.innerText = State.showNotes ? "Hide notes" : "Show notes";
     outputContent.classList.toggle("has-notes", hasNotes && State.showNotes);
@@ -285,7 +295,7 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       workspace: "example",
       grammarText: option.dataset.grammar ?? "",
       inputText: option.dataset.input ?? "",
-      notesText: option.dataset.notes ?? "",
+      notesTemplateId: option.dataset.notesTemplateId ?? "",
       showNotes: true,
     });
     runWithCaret();
@@ -468,7 +478,6 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
 
     #input,
     #grammar,
-    #notes,
     #output {
       margin: 2px;
       padding: 5px;
@@ -484,10 +493,40 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
 
     #notes {
       border-bottom: thin solid gray;
+      flex: 0 1 auto;
+      line-height: 1.4;
+      max-height: 33.333%;
+      padding: 5px 10px;
     }
 
     .content-container {
       overflow-y: scroll;
+    }
+
+    .notes-content {
+      font-family: system-ui, sans-serif;
+      white-space: normal;
+    }
+
+    .notes-content :first-child {
+      margin-top: 0;
+    }
+
+    .notes-content :last-child {
+      margin-bottom: 0;
+    }
+
+    .notes-content code,
+    .notes-content pre {
+      font-family:
+        "Courier Line Draw", "Courier Prime", "Courier New", monospace;
+    }
+
+    .notes-content pre {
+      overflow-x: auto;
+      padding: 0.5rem;
+      background: white;
+      border: thin solid #ddd;
     }
 
     .node-label {
@@ -587,13 +626,14 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
     }
 
     .output-content {
-      display: grid;
-      grid-template-rows: 1fr;
+      display: flex;
+      flex-direction: column;
       min-height: 0;
     }
 
-    .output-content.has-notes {
-      grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+    .output-content > .content-container:last-child {
+      flex: 1;
+      min-height: 0;
     }
 
     #scratch.active {
@@ -661,18 +701,20 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
         <label for="examples">Examples: </label>
         <select name="examples" id="examples">
           {
-            examples.map(({ title, titleEscaped, grammar, input, notes }) => (
-              <option
-                id={`option-${titleEscaped}`}
-                value={titleEscaped}
-                data-grammar={grammar}
-                data-input={input}
-                data-notes={notes}
-                data-default-selected={title == initialExample}
-              >
-                {title}
-              </option>
-            ))
+            examples.map(
+              ({ title, titleEscaped, grammar, input, notesTemplateId }) => (
+                <option
+                  id={`option-${titleEscaped}`}
+                  value={titleEscaped}
+                  data-grammar={grammar}
+                  data-input={input}
+                  data-notes-template-id={notesTemplateId}
+                  data-default-selected={title == initialExample}
+                >
+                  {title}
+                </option>
+              ),
+            )
           }
         </select>
         <button id="scratch" type="button">Scratch</button>
@@ -707,7 +749,9 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
         >
       </span>
       <span class="output-notes-control">
-        <button id="notes-toggle" type="button" class="hidden">Hide notes</button>
+        <button id="notes-toggle" type="button" class="hidden"
+          >Hide notes</button
+        >
       </span>
       <div class="output-controls">
         <span class="output-mode">
@@ -727,10 +771,21 @@ const initialExample = examples.find((e) => e.highlighted)?.title;
       </div>
     </div>
     <div class="output-content" id="output-content">
-      <div class="content-container hidden" id="notes"></div>
+      <div class="content-container notes-content hidden" id="notes"></div>
       <div class="content-container">
         <div id="output"></div>
       </div>
     </div>
   </div>
+  {
+    examples.map(
+      ({ notesTemplateId, notesHtml }) =>
+        notesTemplateId &&
+        notesHtml && (
+          <template id={notesTemplateId}>
+            <Fragment set:html={notesHtml} />
+          </template>
+        ),
+    )
+  }
 </Layout>

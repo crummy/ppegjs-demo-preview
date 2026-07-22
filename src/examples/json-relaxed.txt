@@ -19,6 +19,11 @@ _     : ('#' ~[\n\r]* / [, \t\n\r]+)*
     two: true # for example..
 }
 ---
-A very relaxed JSON RFC8259
-optional: commas, quotes
-and comments
+# JSON Relaxed
+
+A very relaxed version of JSON RFC8259
+
+## Modifications
+
+Unlike standard JSON, this supports commas, quotes
+and comments.
